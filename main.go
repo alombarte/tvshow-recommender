@@ -12,37 +12,64 @@ type Like struct {
 	show too.Item
 }
 
+type Client struct {
+	// Public access
+	Like  chan Like
+	Close chan bool
+	// Private access
+	connection *too.Engine
+}
+
 const NUM_RECOMMENDATIONS = 3
 
 var redisConnection *too.Engine = nil
 
-func New() *too.Engine {
-	if redisConnection == nil {
-		redisAddr, _ := net.ResolveTCPAddr("tcp", ":6379")
-		conn, err := too.New(redisAddr, "movies")
-		if err != nil {
-			log.Fatal(err)
-		}
-		return conn
-	}
-
-	return redisConnection
-}
-
 func main() {
 
-	// Add sample data in the database
-	addSampleData()
+	c := NewClient()
 
-	// Print recommendations for user
-	connection := New()
-	items, _ := connection.Suggestions.For("Albert", NUM_RECOMMENDATIONS)
+	// Add sample data in the database
+	addSampleData(c.Like)
+
+	fmt.Println("recommending")
+	items, _ := c.connection.Suggestions.For("Albert", NUM_RECOMMENDATIONS)
 	for _, item := range items {
 		fmt.Println(item)
 	}
+
 }
 
-func addSampleData() {
+func NewClient() Client {
+
+	redisAddr, _ := net.ResolveTCPAddr("tcp", ":6379")
+	conn, err := too.New(redisAddr, "tvshows")
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	client := Client{make(chan Like), make(chan bool), conn}
+	go client.run()
+	return client
+}
+
+func (c *Client) run() {
+
+	for {
+		select {
+		case like := <-c.Like:
+			fmt.Println("Adding recommendation", like.user, like.show)
+			c.connection.Likes.Add(like.user, like.show)
+
+		case <-c.Close:
+			fmt.Println("Closing connection")
+			close(c.Like)
+			close(c.Close)
+		}
+	}
+}
+
+func addSampleData(c chan Like) {
 	likes := []Like{
 		{"Albert", "Game of Thrones"},
 		{"Albert", "The Big Bang Theory"},
@@ -68,9 +95,8 @@ func addSampleData() {
 		{"Paco", "Fargo"},
 	}
 
-	connection := New()
 	for _, like := range likes {
-		connection.Likes.Add(like.user, like.show)
+		c <- like
 	}
 }
 
