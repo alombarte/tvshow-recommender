@@ -31,11 +31,15 @@ func main() {
 	// Add sample data in the database
 	addSampleData(c.Like)
 
-	fmt.Println("recommending")
-	items, _ := c.connection.Suggestions.For("Albert", NUM_RECOMMENDATIONS)
-	for _, item := range items {
+	// Get suggestions:
+	fmt.Println("Suggestions:")
+	suggestions := c.getSuggestions("Albert")
+
+	for _, item := range suggestions {
 		fmt.Println(item)
 	}
+
+	return
 
 }
 
@@ -60,13 +64,16 @@ func (c *Client) run() {
 		case like := <-c.Like:
 			fmt.Println("Adding recommendation", like.user, like.show)
 			c.connection.Likes.Add(like.user, like.show)
-
 		case <-c.Close:
-			fmt.Println("Closing connection")
-			close(c.Like)
-			close(c.Close)
+			return
 		}
+
 	}
+}
+
+func (c *Client) getSuggestions(user too.User) []too.Item {
+	items, _ := c.connection.Suggestions.For(user, NUM_RECOMMENDATIONS)
+	return items
 }
 
 func addSampleData(c chan Like) {
@@ -82,8 +89,6 @@ func addSampleData(c chan Like) {
 		{"Noemí", "Grey's Anatomy"},
 		{"Noemí", "The Good Wife"},
 		{"Noemí", "Game of Thrones"},
-		{"Noemí", "The Prestige"},
-		{"Noemí", "The Matrix"},
 		{"Noemí", "The Strain"},
 
 		{"Pepe", "Grey's Anatomy"},
@@ -98,8 +103,4 @@ func addSampleData(c chan Like) {
 	for _, like := range likes {
 		c <- like
 	}
-}
-
-func insertLike(user, show string) {
-
 }
