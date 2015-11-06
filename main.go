@@ -14,8 +14,9 @@ type Like struct {
 
 type Client struct {
 	// Public access
-	Like  chan Like
-	Close chan bool
+	Like       chan Like
+	Suggestion chan too.User
+	Close      chan bool
 	// Private access
 	connection *too.Engine
 }
@@ -33,14 +34,7 @@ func main() {
 
 	// Get suggestions:
 	fmt.Println("Suggestions:")
-	suggestions := c.getSuggestions("Albert")
-
-	for _, item := range suggestions {
-		fmt.Println(item)
-	}
-
-	return
-
+	getSuggestions(c.Suggestion, "Albert")
 }
 
 func NewClient() Client {
@@ -52,7 +46,7 @@ func NewClient() Client {
 		log.Fatal(err)
 	}
 
-	client := Client{make(chan Like), make(chan bool), conn}
+	client := Client{make(chan Like), make(chan too.User), make(chan bool), conn}
 	go client.run()
 	return client
 }
@@ -64,16 +58,24 @@ func (c *Client) run() {
 		case like := <-c.Like:
 			fmt.Println("Adding recommendation", like.user, like.show)
 			c.connection.Likes.Add(like.user, like.show)
+
+		case user := <-c.Suggestion:
+			fmt.Println("Suggesting")
+			items, _ := c.connection.Suggestions.For(user, NUM_RECOMMENDATIONS)
+			for _, item := range items {
+				fmt.Println(item)
+			}
+
 		case <-c.Close:
 			return
+
 		}
 
 	}
 }
 
-func (c *Client) getSuggestions(user too.User) []too.Item {
-	items, _ := c.connection.Suggestions.For(user, NUM_RECOMMENDATIONS)
-	return items
+func getSuggestions(c chan too.User, user too.User) {
+	c <- user
 }
 
 func addSampleData(c chan Like) {
